@@ -66,7 +66,7 @@ class Board():
     def __init__(self):
         self.board = [None] * 64
         self.pieces = []
-        self.moveHistory = []# # (Move)
+        self.moveHistory = []
 
         self.isWhiteTurn = True
         self.whiteKingInCheck = False
@@ -93,18 +93,20 @@ class Board():
 
         piece.MakeMove(move)
 
-        print(f"Making move: {move.ToNotation()}")
+        #print(f"Making move: {move.ToNotation()}")
 
         # Promotions
-        if moveType == MoveType.QUEEN_PROMOTION:
-            piece.Promote(PieceType.QUEEN)
+        if moveType == MoveType.QUEEN_PROMOTION: piece.Promote(PieceType.QUEEN)
+        if moveType == MoveType.ROOK_PROMOTION: piece.Promote(PieceType.ROOK)
+        if moveType == MoveType.BISHOP_PROMOTION: piece.Promote(PieceType.BISHOP)
+        if moveType == MoveType.KNIGHT_PROMOTION: piece.Promote(PieceType.KNIGHT)
 
         # Handle special move types
         if moveType == MoveType.SHORT_CASTLE and piece.pieceType == PieceType.KING:
             board.MakeMove(Move(capturedPiece, capturedPiece.square, AddSquares(targetSquare, (-1, 0)), None, MoveType.SHORT_CASTLE))
 
         elif moveType == MoveType.LONG_CASTLE and piece.pieceType == PieceType.KING:
-            board.MakeMove((capturedPiece, capturedPiece.square, AddSquares(targetSquare, (1, 0)), None, MoveType.LONG_CASTLE))
+            board.MakeMove(Move(capturedPiece, capturedPiece.square, AddSquares(targetSquare, (1, 0)), None, MoveType.LONG_CASTLE))
 
         # Capture whatever was there
         else:
@@ -121,7 +123,7 @@ class Board():
 
             self.moveHistory.append(move)
 
-    # TODO: castling and en passant
+    # TODO: en passant
     def UnmakeLastMove(self) -> None:
         lastMove: Move = self.moveHistory.pop()
 
@@ -136,20 +138,32 @@ class Board():
         if moveType in promotionMoveTypes:
             piece.Promote(PieceType.PAWN)
 
-        print(f"Unmaking move: {lastMove.ToNotation()}\n")
+        #print(f"Unmaking move: {lastMove.ToNotation()}\n")
 
         # Undo castling
         if moveType == MoveType.SHORT_CASTLE and piece.pieceType == PieceType.KING:
-            #self.UnmakeLastMove()
-            #print(self.moveHistory)
-            rookTarget = AddSquares(targetSquare, (2, 0))
-            reverseRookMove = Move(capturedPiece, AddSquares(targetSquare, (-1, 0)), rookTarget, None, moveType)
+            self.board[SquareToGridPos(capturedPiece.square)] = None
+
+            rookTarget = AddSquares(targetSquare, (1, 0))
+            reverseRookMove = Move(capturedPiece, AddSquares(targetSquare, (-1, 0)), rookTarget, None, MoveType.SHORT_CASTLE)
+
+            # Fix the board
             self.board[SquareToGridPos(rookTarget)] = capturedPiece
+            self.board[SquareToGridPos(targetSquare)] = None
 
             capturedPiece.MakeMove(reverseRookMove, unmake = True)
 
-        #elif moveType == MoveType.LONG_CASTLE and piece.pieceType == PieceType.KING:
-        #    board.MakeMove((capturedPiece, capturedPiece.square, AddSquares(targetSquare, (1, 0)), None, MoveType.LONG_CASTLE))
+        elif moveType == MoveType.LONG_CASTLE and piece.pieceType == PieceType.KING:
+            self.board[SquareToGridPos(capturedPiece.square)] = None
+
+            rookTarget = AddSquares(targetSquare, (-2, 0))
+            reverseRookMove = Move(capturedPiece, AddSquares(targetSquare, (1, 0)), rookTarget, None, MoveType.LONG_CASTLE)
+
+            # Fix the board
+            self.board[SquareToGridPos(rookTarget)] = capturedPiece
+            self.board[SquareToGridPos(targetSquare)] = None
+
+            capturedPiece.MakeMove(reverseRookMove, unmake = True)
         
         # Swap the pieces
         else:
@@ -599,11 +613,12 @@ def findLegalMovesForPiece(board: Board, piece: Piece, evaluateInCheck: bool = T
         # Diagonal captures
         for i in [-1, 1]:
             diagonal = AddSquares(pos, (i, direction))
+            capturePiece = board.GetPieceAtSquare(diagonal)
 
-            if board.GetPieceAtSquare(diagonal) != None:
+            if capturePiece != None:
                 # Promotions
                 if atSecondLastRank:
-                    promoteMoves = [Move(piece, pos, diagonal, None, p) for p in promotionMoveTypes]
+                    promoteMoves = [Move(piece, pos, diagonal, capturePiece, p) for p in promotionMoveTypes]
 
                     validMoves.extend([m for m in promoteMoves if isValidMove(board, m, evaluateInCheck)])
                 else:
@@ -661,7 +676,7 @@ def makeMove(board: Board) -> None:
 def init() -> Board:
     board = Board()
 
-    spawnPieces(board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK2R") #rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
+    spawnPieces(board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR") #rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
 
     return board
 
