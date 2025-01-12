@@ -123,7 +123,6 @@ class Board():
 
             self.moveHistory.append(move)
 
-    # TODO: en passant
     def UnmakeLastMove(self) -> None:
         lastMove: Move = self.moveHistory.pop()
 
@@ -179,11 +178,6 @@ class Board():
         lastMove.piece.MakeMove(reverseMove, unmake = True)
 
         self.isWhiteTurn = not self.isWhiteTurn
-
-        # TODO: en passant and castling
-
-
-
 # endregion
 
 # region Images
@@ -460,13 +454,11 @@ class Move:
 
         if self.putsOtherKingInCheck: moveString += "+"
 
-        return moveString + f"({self.moveType}, {self.piece.pieceType})"
+        return moveString
 
 #Move = tuple[Piece, Square, Square, Piece, MoveType]
 def isValidMove(board: Board, move: Move, evaluateInCheck: bool = True) -> bool:
     # Make sure this isn't off the board
-    # TODO: Castle through check
-    # TODO: Promotion
     piece = move.piece
     targetSquare = move.targetSquare
     capturePiece = move.capturedPiece
@@ -482,12 +474,21 @@ def isValidMove(board: Board, move: Move, evaluateInCheck: bool = True) -> bool:
         # Check if the rook is there/can move
         if capturePiece == None or capturePiece.timesMoved > 0: return False
 
+        # Also make sure we can move just 1 over
+        throughCheck = not isValidMove(board, Move(piece, move.startSquare, AddSquares(targetSquare, (-1, 0)), None, MoveType.NORMAL))
+
+        if throughCheck: return False
+
         castling = True
     
     elif moveType == MoveType.LONG_CASTLE:
         if not len(checkAlongDirection(board, piece, (-1, 0))) == 3: return False
 
         if capturePiece == None or capturePiece.timesMoved > 0: return False
+
+        throughCheck = not isValidMove(board, Move(piece, move.startSquare, AddSquares(targetSquare, (1, 0)), None, MoveType.NORMAL))
+
+        if throughCheck: return False
 
         castling = True
     
@@ -559,7 +560,7 @@ def findLegalMovesForPiece(board: Board, piece: Piece, evaluateInCheck: bool = T
     # get all moves for this piece
     # include en passant and castling
     # make sure that square isn't blocked
-    # TODO: make sure it doesn't lead to being in check
+    # make sure it doesn't lead to being in check
 
     # Get all moves for this piece
     possibleSquaresToMoveTo = []
@@ -676,7 +677,7 @@ def makeMove(board: Board) -> None:
 def init() -> Board:
     board = Board()
 
-    spawnPieces(board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR") #rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
+    spawnPieces(board, "rnbqkbnr/pppppppp/8/1b5b/8/8/PPP11PPP/R3K2R") #rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
 
     return board
 
