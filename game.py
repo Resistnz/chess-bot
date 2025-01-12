@@ -1,6 +1,7 @@
 import pygame
 from pygame import gfxdraw
 from enum import Enum
+import time
 
 pygame.init()
 
@@ -46,6 +47,15 @@ letterToPiece = {
     "p": PieceType.PAWN
 }
 
+pieceValues = {
+    PieceType.ROOK: 5,
+    PieceType.KNIGHT: 3,
+    PieceType.BISHOP: 3,
+    PieceType.KING: 999,
+    PieceType.QUEEN: 9,
+    PieceType.PAWN: 1
+}
+
 pieceToLetter = {value: key for key, value in letterToPiece.items()}
 
 def SquareToGridPos(square: Square) -> int:
@@ -71,6 +81,8 @@ class Board():
         self.isWhiteTurn = True
         self.whiteKingInCheck = False
         self.blackKingInCheck = False
+
+        self.checkmate = False
 
     def AddPiece(self, piece: PieceType, square: Square) -> None:
         self.board[SquareToGridPos(square)] = piece
@@ -191,7 +203,7 @@ for p in pieceNames:
 # endregion
 
 # region UI
-class Button():
+class Element():
     def __init__(self, x: int, y: int, w: int, h: int, col: Colour = (255, 255, 255), text: str = None):
         self.x = x
         self.y = y
@@ -211,6 +223,11 @@ class Button():
         #    t = letterFont.render(self.text, True, (255, 255, 255))
         #    win.blit(t, (self.x + self.w/2 - letterFont.size(self.text)[0]/2, self.y + self.h/2 - letterFont.size(self.text)[1]/2))
 
+    # Multiply the colour tuple by some amount
+    def _darken(self, colToDarken: Colour, darkenAmount: float) -> Colour:
+        return tuple(int(c * darkenAmount) for c in colToDarken)
+
+class Button(Element):
     def Update(self, mouseJustClicked: bool):
         p = pygame.mouse.get_pos()
 
@@ -224,15 +241,9 @@ class Button():
 
             # Darken even more if just clicked
             if mouseJustClicked:
-                #self.currentColour = self._darken(self.currentColour, 0.8)
-
                 self.Clicked()
 
         self.Draw()
-
-    # Multiply the colour tuple by some amount
-    def _darken(self, colToDarken: Colour, darkenAmount: float) -> Colour:
-        return tuple(int(c * darkenAmount) for c in colToDarken)
 
     def Clicked(self):
         return
@@ -415,6 +426,11 @@ def spawnPieces(board: Board, FEN: str) -> None:
 
             currentSquare += 1
     
+def triggerCheckmate(board: Board):
+    board.checkmate = True
+
+    checkmateBox = Button(30, 30, 300, 300, (36, 41, 46))
+    elements.append(checkmateBox)
 # endregion
 
 # region Bot
@@ -554,6 +570,9 @@ def findLegalMoves(board: Board, evaluateInCheck: bool = True) -> list[Move]:
 
         legalMovesInPosition.extend(findLegalMovesForPiece(board, piece, evaluateInCheck))
 
+    if len(legalMovesInPosition) == 0:
+        triggerCheckmate(board)
+
     return legalMovesInPosition
 
 def findLegalMovesForPiece(board: Board, piece: Piece, evaluateInCheck: bool = True) -> list[Move]:
@@ -561,6 +580,8 @@ def findLegalMovesForPiece(board: Board, piece: Piece, evaluateInCheck: bool = T
     # include en passant and castling
     # make sure that square isn't blocked
     # make sure it doesn't lead to being in check
+
+    if piece.isCaptured: return []
 
     # Get all moves for this piece
     possibleSquaresToMoveTo = []
@@ -663,13 +684,44 @@ def findLegalMovesForPiece(board: Board, piece: Piece, evaluateInCheck: bool = T
     
     return validMoves
 
-def makeMove(board: Board) -> None:
+# Return an eval as a number
+def evaluatePosition(board: Board) -> int:
+    # get material
+    whiteMaterial = 0
+    blackMaterial = 0
+
+    # Just add up all material values
+    for piece in board.pieces:
+        if piece.isCaptured: continue
+
+        if piece.isWhite: whiteMaterial += pieceValues[piece.pieceType]
+        else: blackMaterial += pieceValues[piece.pieceType]
+
+    return whiteMaterial - blackMaterial
+
+def makeComputerMove(board: Board) -> None:
     # generate possible moves
     # evaluate
     # pick the best
     # make the move
+    moves = findLegalMoves(board)
 
-    return
+    bestMove: Move = None
+    bestEval = -999999
+
+    for move in moves:
+        board.MakeMove(move)
+        evaluation = -evaluatePosition(board)
+        board.UnmakeLastMove()
+
+        if board.isWhiteTurn: evaluation *= -1
+
+        if evaluation >= bestEval:
+            bestMove = move
+            bestEval = evaluation
+
+    if len(moves) > 0:
+        board.MakeMove(bestMove)
 
 # endregion
 
@@ -677,7 +729,7 @@ def makeMove(board: Board) -> None:
 def init() -> Board:
     board = Board()
 
-    spawnPieces(board, "rnbqkbnr/pppppppp/8/1b5b/8/8/PPP11PPP/R3K2R") #rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
+    spawnPieces(board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR") #rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
 
     return board
 
@@ -705,15 +757,16 @@ def updateScreen(mouseJustClicked) -> None:
 
 # Main game loop
 def game(board: Board) -> None:
-    global isWhiteTurn
+    if board.checkmate:
+        return
 
     # Assume white is player
-    if isWhiteTurn:
+    if board.isWhiteTurn:
         pass
 
     # Do computer stuff
     else:
-        makeMove(board)
+        makeComputerMove(board)
 
 # Start everything up
 board = init()
